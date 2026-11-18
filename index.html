@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Remoto Universal para micro:bit</title>
+    <!-- Tailwind CSS para diseño responsivo y moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos base y corrección de reglas globales */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #9333ea 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+            color: #ffffff;
+        }
+
+        /* Efecto Glassmorphism principal */
+        .glass-container {
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 520px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+
+        /* Paneles internos translúcidos */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+        }
+
+        /* Botones personalizados */
+        .control-btn {
+            position: relative;
+            border: none;
+            border-radius: 16px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, opacity 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 10px;
+            min-height: 82px;
+            user-select: none;
+            overflow: visible;
+        }
+
+        .control-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+        }
+
+        .control-btn:active:not(:disabled),
+        .control-btn.pressed {
+            transform: scale(0.94);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+
+        .control-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            filter: grayscale(30%);
+        }
+
+        /* Paleta de colores para botones */
+        .btn-blue   { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+        .btn-green  { background: linear-gradient(135deg, #10b981, #047857); }
+        .btn-red    { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+        .btn-amber  { background: linear-gradient(135deg, #f59e0b, #b45309); }
+        .btn-purple { background: linear-gradient(135deg, #a855f7, #6d28d9); }
+        .btn-slate  { background: linear-gradient(135deg, #64748b, #334155); }
+
+        /* Animación de vibración suave en Modo Edición */
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-1deg); }
+            50% { transform: rotate(1deg); }
+        }
+
+        .edit-mode .control-btn {
+            animation: wiggle 0.35s infinite ease-in-out;
+            opacity: 1 !important;
+            filter: none !important;
+            cursor: default;
+        }
+
+        /* Botón de eliminar (X) en modo edición */
+        .delete-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 26px;
+            height: 26px;
+            background: #ef4444;
+            color: white;
+            border: 2px solid white;
+            border-radius: 50%;
+            font-size: 13px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            transition: transform 0.15s ease, background 0.15s ease;
+            z-index: 10;
+        }
+
+        .delete-badge:hover {
+            transform: scale(1.15);
+            background: #dc2626;
+        }
+
+        /* Personalización de scrollbar para el log */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Selector de color circular */
+        .color-radio:checked + label {
+            transform: scale(1.2);
+            box-shadow: 0 0 0 3px #ffffff, 0 4px 10px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="glass-container">
+        <!-- Encabezado -->
+        <header class="text-center mb-5">
+            <div class="inline-flex items-center justify-center gap-2 mb-1">
+                <span class="text-2xl">🎮</span>
+                <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white drop-shadow">
+                    Control Remoto micro:bit
+                </h1>
+            </div>
+            <p class="text-xs text-purple-100/80">Universal • Personalizable • Web Bluetooth UART</p>
+        </header>
+
+        <!-- Barra de Estado y Conexión -->
+        <section class="glass-panel p-4 mb-5">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 mb-3">
+                <!-- Indicador de estado -->
+                <div id="statusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-red-500/25 border border-red-400/40 text-red-100 w-full sm:w-auto justify-center">
+                    <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-400 animate-pulse"></span>
+                    <span id="statusText">Desconectado</span>
+                </div>
+
+                <!-- Switch Modo Simulación / Prueba -->
+                <label class="flex items-center gap-2 cursor-pointer text-xs font-medium text-purple-100 select-none bg-white/10 px-3 py-1.5 rounded-full border border-white/15 hover:bg-white/15 transition">
+                    <input type="checkbox" id="simModeToggle" class="sr-only peer">
+                    <div class="w-8 h-4 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all relative peer-checked:bg-amber-500"></div>
+                    <span>🧪 Modo Prueba</span>
+                </label>
+            </div>
+
+            <!-- Botón principal de conexión y ajuste rápido de delimitador -->
+            <div class="flex gap-2">
+                <button id="connectBtn" class="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2">
+                    <span>🔗</span>
+                    <span id="connectBtnText">Conectar micro:bit</span>
+                </button>
+
+                <!-- Configuración rápida de delimitador -->
+                <div class="flex items-center bg-black/25 border border-white/15 rounded-xl px-2.5" title="Carácter final enviado tras cada comando (ej. # o vacío)">
+                    <label for="delimiterInput" class="text-[11px] text-purple-200 mr-1.5 whitespace-nowrap">Fin:</label>
+                    <input type="text" id="delimiterInput" value="#" maxlength="3" placeholder="ninguno"
+                        class="w-10 bg-white/10 text-center text-white text-xs font-mono font-bold rounded py-1 border border-white/20 focus:outline-none focus:border-purple-300">
+                </div>
+            </div>
+        </section>
+
+        <!-- Barra de Herramientas de Personalización -->
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 class="text-sm font-semibold text-purple-100 flex items-center gap-1.5">
+                <span>🎛️</span> Panel de Control
+            </h2>
+            
+            <div class="flex items-center gap-1.5">
+                <!-- Botón abrir formulario Añadir -->
+                <button id="toggleAddPanelBtn" class="bg-white/15 hover:bg-white/25 text-white text-xs font-medium py-1.5 px-3 rounded-lg border border-white/20 transition flex items-center gap-1">
+                    <span>➕</span> Añadir
+                </button>
+
+                <!-- Botón Modo Edición (Quitar botones) -->
+                <button id="toggleEditModeBtn" class="bg-white/15 hover:bg-white/25 text-white text-xs font-medium py-1.5 px-3 rounded-lg border border-white/20 transition flex items-center gap-1">
+                    <span>✏️</span> <span id="editBtnLabel">Editar</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Panel Desplegable para Añadir Nuevo Botón -->
+        <section id="addButtonPanel" class="hidden glass-panel p-4 mb-4 border-purple-300/40 bg-indigo-950/50 transition-all">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-purple-200">Nuevo Botón Personalizado</h3>
+                <button id="closeAddPanelBtn" class="text-purple-200 hover:text-white text-sm font-bold px-1">✕</button>
+            </div>
+
+            <form id="addButtonForm" class="space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- Etiqueta visual -->
+                    <div>
+                        <label class="block text-[11px] text-purple-200 mb-1">Texto o Emoji del botón</label>
+                        <input type="text" id="btnLabelInput" required maxlength="18" placeholder="Ej: Adelante 🔼 o Claxon 📯"
+                            class="w-full bg-white/10 border border-white/25 rounded-lg px-3 py-2 text-sm text-white placeholder-purple-200/50 focus:outline-none focus:border-white">
+                    </div>
+
+                    <!-- Comando / Carácter a enviar -->
+                    <div>
+                        <label class="block text-[11px] text-purple-200 mb-1">Letra, número o signo (BLE)</label>
+                        <input type="text" id="btnCmdInput" required maxlength="10" placeholder="Ej: f, A, 1, *, @"
+                            class="w-full bg-white/10 border border-white/25 rounded-lg px-3 py-2 text-sm font-mono font-bold text-white placeholder-purple-200/50 focus:outline-none focus:border-white">
+                    </div>
+                </div>
+
+                <!-- Selector de color y botón guardar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-[11px] text-purple-200">Color:</span>
+                        
+                        <div>
+                            <input type="radio" name="btnColor" id="col-blue" value="btn-blue" class="sr-only color-radio" checked>
+                            <label for="col-blue" class="block w-6 h-6 rounded-full btn-blue cursor-pointer transition"></label>
+                        </div>
+                        <div>
+                            <input type="radio" name="btnColor" id="col-green" value="btn-green" class="sr-only color-radio">
+                            <label for="col-green" class="block w-6 h-6 rounded-full btn-green cursor-pointer transition"></label>
+                        </div>
+                        <div>
+                            <input type="radio" name="btnColor" id="col-red" value="btn-red" class="sr-only color-radio">
+                            <label for="col-red" class="block w-6 h-6 rounded-full btn-red cursor-pointer transition"></label>
+                        </div>
+                        <div>
+                            <input type="radio" name="btnColor" id="col-amber" value="btn-amber" class="sr-only color-radio">
+                            <label for="col-amber" class="block w-6 h-6 rounded-full btn-amber cursor-pointer transition"></label>
+                        </div>
+                        <div>
+                            <input type="radio" name="btnColor" id="col-purple" value="btn-purple" class="sr-only color-radio">
+                            <label for="col-purple" class="block w-6 h-6 rounded-full btn-purple cursor-pointer transition"></label>
+                        </div>
+                        <div>
+                            <input type="radio" name="btnColor" id="col-slate" value="btn-slate" class="sr-only color-radio">
+                            <label for="col-slate" class="block w-6 h-6 rounded-full btn-slate cursor-pointer transition"></label>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="bg-white text-indigo-900 hover:bg-purple-100 font-bold text-xs py-2 px-4 rounded-lg shadow transition">
+                        Guardar Botón
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Barra de acciones extra visible solo en Modo Edición -->
+        <div id="editActionsBar" class="hidden flex items-center justify-between bg-amber-500/20 border border-amber-400/40 rounded-xl px-3 py-2 mb-3 text-xs">
+            <span class="text-amber-100 font-medium">Toca la <b>✕</b> para borrar botones</span>
+            <div class="flex gap-2">
+                <button id="resetDefaultBtn" class="bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-md font-medium transition">
+                    ↺ Restaurar
+                </button>
+                <button id="clearAllBtn" class="bg-red-500/70 hover:bg-red-500 text-white px-2.5 py-1 rounded-md font-medium transition">
+                    🗑️ Vaciar
+                </button>
+            </div>
+        </div>
+
+        <!-- Cuadrícula Dinámica de Botones -->
+        <main id="buttonsGrid" class="grid grid-cols-3 gap-3 mb-5 min-h-[120px]">
+            <!-- Los botones se renderizan dinámicamente aquí mediante JS -->
+        </main>
+
+        <!-- Consola / Registro de Comandos -->
+        <section class="glass-panel p-3">
+            <div class="flex items-center justify-between mb-1.5">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-purple-200">📟 Registro de Actividad</span>
+                <button id="clearLogBtn" class="text-[11px] text-purple-200 hover:text-white underline">Limpiar</button>
+            </div>
+            <div id="logConsole" class="custom-scroll h-28 overflow-y-auto font-mono text-xs text-emerald-100/90 space-y-1 pr-1">
+                <!-- Mensajes del sistema y comandos enviados -->
+            </div>
+        </section>
+    </div>
+
+    <script>
+        /**
+         * Control Remoto Bluetooth Universal para BBC micro:bit
+         * Utiliza Web Bluetooth API con el servicio Nordic UART (NUS)
+         */
+        class MicrobitUniversalRemote {
+            constructor() {
+                // UUIDs estándar del servicio Nordic UART para BBC micro:bit
+                this.UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+                // Característica RX de la micro:bit (donde la web escribe datos hacia la placa)
+                this.UART_RX_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+                // Estado Bluetooth
+                this.device = null;
+                this.server = null;
+                this.service = null;
+                this.rxCharacteristic = null;
+                this.isConnected = false;
+
+                // Estado de la interfaz
+                this.isSimMode = false;
+                this.isEditMode = false;
+                this.STORAGE_KEY = 'microbit_custom_buttons_v1';
+                this.DELIMITER_KEY = 'microbit_custom_delimiter_v1';
+
+                // Set de botones por defecto genéricos para cualquier micro:bit
+                this.defaultButtons = [
+                    { id: 'def-1', label: 'Botón A', command: 'A', color: 'btn-purple' },
+                    { id: 'def-2', label: '🔼 Adelante', command: 'f', color: 'btn-blue' },
+                    { id: 'def-3', label: 'Botón B', command: 'B', color: 'btn-purple' },
+                    { id: 'def-4', label: '◀ Izquierda', command: 'l', color: 'btn-blue' },
+                    { id: 'def-5', label: '🛑 Stop', command: 'S', color: 'btn-red' },
+                    { id: 'def-6', label: '▶ Derecha', command: 'r', color: 'btn-blue' },
+                    { id: 'def-7', label: '💡 Luz ON', command: '1', color: 'btn-amber' },
+                    { id: 'def-8', label: '🔽 Atrás', command: 'b', color: 'btn-blue' },
+                    { id: 'def-9', label: '🌑 Luz OFF', command: '0', color: 'btn-slate' }
+                ];
+
+                this.buttons = [];
+                this.cacheDOM();
+                this.loadSettings();
+                this.bindEvents();
+                this.renderButtons();
+                this.checkBluetoothSupport();
+            }
+
+            // Referencias a elementos del DOM
+            cacheDOM() {
+                this.connectBtn = document.getElementById('connectBtn');
+                this.connectBtnText = document.getElementById('connectBtnText');
+                this.statusBadge = document.getElementById('statusBadge');
+                this.statusDot = document.getElementById('statusDot');
+                this.statusText = document.getElementById('statusText');
+                this.simModeToggle = document.getElementById('simModeToggle');
+                this.delimiterInput = document.getElementById('delimiterInput');
+
+                this.buttonsGrid = document.getElementById('buttonsGrid');
+                this.toggleAddPanelBtn = document.getElementById('toggleAddPanelBtn');
+                this.closeAddPanelBtn = document.getElementById('closeAddPanelBtn');
+                this.addButtonPanel = document.getElementById('addButtonPanel');
+                this.addButtonForm = document.getElementById('addButtonForm');
+                this.btnLabelInput = document.getElementById('btnLabelInput');
+                this.btnCmdInput = document.getElementById('btnCmdInput');
+
+                this.toggleEditModeBtn = document.getElementById('toggleEditModeBtn');
+                this.editBtnLabel = document.getElementById('editBtnLabel');
+                this.editActionsBar = document.getElementById('editActionsBar');
+                this.resetDefaultBtn = document.getElementById('resetDefaultBtn');
+                this.clearAllBtn = document.getElementById('clearAllBtn');
+
+                this.logConsole = document.getElementById('logConsole');
+                this.clearLogBtn = document.getElementById('clearLogBtn');
+            }
+
+            // Cargar botones y delimitador desde localStorage
+            loadSettings() {
+                try {
+                    const savedButtons = localStorage.getItem(this.STORAGE_KEY);
+                    if (savedButtons) {
+                        this.buttons = JSON.parse(savedButtons);
+                    } else {
+                        this.buttons = [...this.defaultButtons];
+                        this.saveButtons();
+                    }
+
+                    const savedDelimiter = localStorage.getItem(this.DELIMITER_KEY);
+                    if (savedDelimiter !== null) {
+                        this.delimiterInput.value = savedDelimiter;
+                    }
+                } catch (e) {
+                    this.buttons = [...this.defaultButtons];
+                    this.log('⚠️ No se pudo leer la memoria local, usando botones por defecto.');
+                }
+            }
+
+            saveButtons() {
+                try {
+                    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.buttons));
+                } catch (e) {
+                    this.log('⚠️ Error al guardar en localStorage.');
+                }
+            }
+
+            // Configurar escuchadores de eventos
+            bindEvents() {
+                // Conexión / Desconexión Bluetooth
+                this.connectBtn.addEventListener('click', () => {
+                    if (this.isConnected) {
+                        this.disconnect();
+                    } else {
+                        this.connect();
+                    }
+                });
+
+                // Modo Simulación / Prueba
+                this.simModeToggle.addEventListener('change', (e) => {
+                    this.isSimMode = e.target.checked;
+                    if (this.isSimMode) {
+                        this.log('🧪 Modo Prueba activado: puedes pulsar botones sin conexión real.');
+                    } else {
+                        this.log('🔌 Modo Prueba desactivado.');
+                    }
+                    this.updateUIState();
+                });
+
+                // Guardar delimitador al cambiarlo
+                this.delimiterInput.addEventListener('input', () => {
+                    localStorage.setItem(this.DELIMITER_KEY, this.delimiterInput.value);
+                });
+
+                // Mostrar / Ocultar panel de añadir botón
+                this.toggleAddPanelBtn.addEventListener('click', () => {
+                    this.addButtonPanel.classList.toggle('hidden');
+                    if (!this.addButtonPanel.classList.contains('hidden')) {
+                        this.btnLabelInput.focus();
+                        // Salir de modo edición si estaba activo
+                        if (this.isEditMode) this.toggleEditMode();
+                    }
+                });
+
+                this.closeAddPanelBtn.addEventListener('click', () => {
+                    this.addButtonPanel.classList.add('hidden');
+                });
+
+                // Formulario crear nuevo botón
+                this.addButtonForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleAddButton();
+                });
+
+                // Alternar Modo Edición (para borrar botones)
+                this.toggleEditModeBtn.addEventListener('click', () => {
+                    this.toggleEditMode();
+                });
+
+                // Restaurar botones por defecto (sin usar confirm() nativo)
+                this.resetDefaultBtn.addEventListener('click', () => {
+                    this.buttons = [...this.defaultButtons];
+                    this.saveButtons();
+                    this.renderButtons();
+                    this.log('↺ Botones restaurados a la configuración inicial.');
+                });
+
+                // Vaciar todos los botones
+                this.clearAllBtn.addEventListener('click', () => {
+                    this.buttons = [];
+                    this.saveButtons();
+                    this.renderButtons();
+                    this.log('🗑️ Todos los botones han sido eliminados.');
+                });
+
+                // Limpiar consola
+                this.clearLogBtn.addEventListener('click', () => {
+                    this.logConsole.innerHTML = '';
+                });
+            }
+
+            // Verificar compatibilidad del navegador con Web Bluetooth
+            checkBluetoothSupport() {
+                if (!navigator.bluetooth) {
+                    this.log('⚠️ Web Bluetooth no soportado en este navegador. Usa Chrome, Edge u Opera (o activa el Modo Prueba).');
+                    this.connectBtn.disabled = true;
+                    this.connectBtnText.textContent = 'Bluetooth no soportado';
+                } else {
+                    this.log('📘 Listo para conectar con cualquier BBC micro:bit.');
+                    this.log('💡 Asegúrate de cargar el servicio UART Bluetooth en MakeCode.');
+                }
+            }
+
+            // Conectar vía Web Bluetooth
+            async connect() {
+                try {
+                    this.log('🔍 Buscando placas BBC micro:bit...');
+                    this.connectBtn.disabled = true;
+                    this.connectBtnText.textContent = 'Buscando...';
+
+                    this.device = await navigator.bluetooth.requestDevice({
+                        filters: [{ namePrefix: 'BBC micro:bit' }],
+                        optionalServices: [this.UART_SERVICE_UUID]
+                    });
+
+                    this.log(`📱 Conectando con: ${this.device.name}...`);
+                    this.connectBtnText.textContent = 'Conectando...';
+
+                    this.device.addEventListener('gattserverdisconnected', () => this.onDisconnected());
+
+                    this.server = await this.device.gatt.connect();
+                    this.service = await this.server.getPrimaryService(this.UART_SERVICE_UUID);
+                    this.rxCharacteristic = await this.service.getCharacteristic(this.UART_RX_CHAR_UUID);
+
+                    this.isConnected = true;
+                    this.log(`✅ ¡Conectado exitosamente a ${this.device.name}!`);
+                    this.updateUIState();
+
+                } catch (error) {
+                    if (error.name === 'NotFoundError') {
+                        this.log('ℹ️ Selección de dispositivo cancelada.');
+                    } else {
+                        this.log(`❌ Error BLE: ${error.message}`);
+                    }
+                    this.isConnected = false;
+                    this.updateUIState();
+                }
+            }
+
+            // Desconectar dispositivo
+            disconnect() {
+                if (this.device && this.device.gatt.connected) {
+                    this.device.gatt.disconnect();
+                } else {
+                    this.onDisconnected();
+                }
+            }
+
+            onDisconnected() {
+                this.isConnected = false;
+                this.device = null;
+                this.server = null;
+                this.service = null;
+                this.rxCharacteristic = null;
+                this.log('🔌 Desconectado de la micro:bit.');
+                this.updateUIState();
+            }
+
+            // Actualizar aspecto de botones y estado según conexión o simulación
+            updateUIState() {
+                const canOperate = this.isConnected || this.isSimMode || this.isEditMode;
+
+                if (this.isConnected) {
+                    this.statusBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/25 border border-emerald-400/50 text-emerald-100 w-full sm:w-auto justify-center';
+                    this.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+                    this.statusText.textContent = `Conectado: ${this.device ? this.device.name : 'micro:bit'}`;
+
+                    this.connectBtn.disabled = false;
+                    this.connectBtn.className = 'flex-1 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg transition transform active:scale-95 text-sm flex items-center justify-center gap-2';
+                    this.connectBtnText.textContent = 'Desconectar';
+                } else if (this.isSimMode) {
+                    this.statusBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/25 border border-amber-400/50 text-amber-100 w-full sm:w-auto justify-center';
+                    this.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping';
+                    this.statusText.textContent = 'Modo Prueba Activo';
+
+                    if (navigator.bluetooth) {
+                        this.connectBtn.disabled = false;
+                        this.connectBtn.className = 'flex-1 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg transition transform active:scale-95 text-sm flex items-center justify-center gap-2';
+                        this.connectBtnText.textContent = 'Conectar micro:bit';
+                    }
+                } else {
+                    this.statusBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-red-500/25 border border-red-400/40 text-red-100 w-full sm:w-auto justify-center';
+                    this.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-red-400 animate-pulse';
+                    this.statusText.textContent = 'Desconectado';
+
+                    if (navigator.bluetooth) {
+                        this.connectBtn.disabled = false;
+                        this.connectBtn.className = 'flex-1 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg transition transform active:scale-95 text-sm flex items-center justify-center gap-2';
+                        this.connectBtnText.textContent = 'Conectar micro:bit';
+                    }
+                }
+
+                // Habilitar o deshabilitar los botones de control
+                const btns = this.buttonsGrid.querySelectorAll('.control-btn');
+                btns.forEach(btn => {
+                    btn.disabled = !canOperate;
+                });
+            }
+
+            // Enviar comando UART a la micro:bit
+            async sendCommand(command, btnElement) {
+                if (this.isEditMode) return; // En modo edición no se envían comandos
+
+                // Feedback visual inmediato
+                if (btnElement) {
+                    btnElement.classList.add('pressed');
+                    setTimeout(() => btnElement.classList.remove('pressed'), 150);
+                }
+
+                const delimiter = this.delimiterInput.value || '';
+                const payload = command + delimiter;
+
+                // Si estamos en Modo Simulación y no conectados realmente
+                if (!this.isConnected && this.isSimMode) {
+                    this.log(`🧪 [SIMULADO] Enviado: "${payload}"`);
+                    return;
+                }
+
+                if (!this.isConnected || !this.rxCharacteristic) {
+                    this.log('⚠️ Conecta la micro:bit o activa el Modo Prueba.');
+                    return;
+                }
+
+                try {
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(payload);
+                    await this.rxCharacteristic.writeValue(data);
+                    this.log(`📤 Enviado: "${payload}"`);
+                } catch (error) {
+                    this.log(`❌ Error al enviar "${payload}": ${error.message}`);
+                }
+            }
+
+            // Añadir un nuevo botón desde el formulario
+            handleAddButton() {
+                const label = this.btnLabelInput.value.trim();
+                const command = this.btnCmdInput.value.trim();
+                const selectedColor = document.querySelector('input[name="btnColor"]:checked').value;
+
+                if (!label || !command) return;
+
+                const newBtn = {
+                    id: 'btn-' + Date.now(),
+                    label: label,
+                    command: command,
+                    color: selectedColor
+                };
+
+                this.buttons.push(newBtn);
+                this.saveButtons();
+                this.renderButtons();
+
+                this.log(`➕ Botón añadido: "${label}" → [${command}]`);
+                this.addButtonForm.reset();
+                this.addButtonPanel.classList.add('hidden');
+            }
+
+            // Eliminar un botón específico por ID
+            deleteButton(id) {
+                const target = this.buttons.find(b => b.id === id);
+                this.buttons = this.buttons.filter(b => b.id !== id);
+                this.saveButtons();
+                this.renderButtons();
+                if (target) {
+                    this.log(`🗑️ Eliminado: "${target.label}"`);
+                }
+            }
+
+            // Activar/Desactivar Modo Edición
+            toggleEditMode() {
+                this.isEditMode = !this.isEditMode;
+
+                if (this.isEditMode) {
+                    this.buttonsGrid.classList.add('edit-mode');
+                    this.editActionsBar.classList.remove('hidden');
+                    this.toggleEditModeBtn.classList.replace('bg-white/15', 'bg-amber-500');
+                    this.editBtnLabel.textContent = 'Listo';
+                    this.addButtonPanel.classList.add('hidden');
+                } else {
+                    this.buttonsGrid.classList.remove('edit-mode');
+                    this.editActionsBar.classList.add('hidden');
+                    this.toggleEditModeBtn.classList.replace('bg-amber-500', 'bg-white/15');
+                    this.editBtnLabel.textContent = 'Editar';
+                }
+
+                this.renderButtons();
+            }
+
+            // Renderizar todos los botones en la cuadrícula
+            renderButtons() {
+                this.buttonsGrid.innerHTML = '';
+
+                if (this.buttons.length === 0) {
+                    this.buttonsGrid.innerHTML = `
+                        <div class="col-span-3 glass-panel p-6 text-center text-purple-200/80 text-xs">
+                            No hay botones configurados.<br>
+                            Pulsa <b>"➕ Añadir"</b> para crear tus propios controles.
+                        </div>
+                    `;
+                    return;
+                }
+
+                this.buttons.forEach(btnData => {
+                    const btnEl = document.createElement('button');
+                    btnEl.type = 'button';
+                    btnEl.className = `control-btn ${btnData.color}`;
+                    
+                    // Contenido visual: etiqueta + insignia pequeña del comando que envía
+                    btnEl.innerHTML = `
+                        <span class="text-sm sm:text-base leading-tight text-center break-words w-full px-1">${this.escapeHTML(btnData.label)}</span>
+                        <span class="mt-1.5 text-[10px] font-mono bg-black/25 px-2 py-0.5 rounded-full text-white/90 border border-white/15">
+                            ${this.escapeHTML(btnData.command)}
+                        </span>
+                    `;
+
+                    // Si el Modo Edición está activo, añadir botón de borrar (X)
+                    if (this.isEditMode) {
+                        const delBadge = document.createElement('span');
+                        delBadge.className = 'delete-badge';
+                        delBadge.innerHTML = '✕';
+                        delBadge.title = 'Eliminar botón';
+                        delBadge.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.deleteButton(btnData.id);
+                        });
+                        btnEl.appendChild(delBadge);
+                    } else {
+                        // Evento normal de envío de comando
+                        btnEl.addEventListener('click', () => {
+                            this.sendCommand(btnData.command, btnEl);
+                        });
+                    }
+
+                    this.buttonsGrid.appendChild(btnEl);
+                });
+
+                this.updateUIState();
+            }
+
+            // Prevenir inyección HTML en etiquetas personalizadas
+            escapeHTML(str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+
+            // Escribir mensaje con marca de tiempo en la consola inferior
+            log(message) {
+                const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const entry = document.createElement('div');
+                entry.innerHTML = `<span class="text-purple-300/70">[${time}]</span> ${this.escapeHTML(message)}`;
+                this.logConsole.appendChild(entry);
+                this.logConsole.scrollTop = this.logConsole.scrollHeight;
+            }
+        }
+
+        // Iniciar aplicación al cargar el DOM
+        document.addEventListener('DOMContentLoaded', () => {
+            new MicrobitUniversalRemote();
+        });
+    </script>
+</body>
+</html>
